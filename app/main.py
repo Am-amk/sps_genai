@@ -1,10 +1,11 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from pydantic import BaseModel, Field
 
 from app.bigram_model import BigramModel
 from app.embedding_model import EmbeddingModel
+from app.image_classifier import ImageClassifier
 
-app = FastAPI()
+app = FastAPI(title="SPS GenAI API")
 
 # Sample corpus for the bigram model
 corpus = [
@@ -17,20 +18,21 @@ corpus = [
 
 bigram_model = BigramModel(corpus)
 embedding_model = EmbeddingModel()
+image_classifier = ImageClassifier()
 
 
 class TextGenerationRequest(BaseModel):
     start_word: str
-    length: int
+    length: int = Field(10, ge=1, le=200)
 
 
 class EmbeddingRequest(BaseModel):
-    word: str
+    word: str = Field(..., min_length=1, examples=["apple"])
 
 
 class SimilarityRequest(BaseModel):
-    word1: str
-    word2: str
+    word1: str = Field(..., min_length=1, examples=["apple"])
+    word2: str = Field(..., min_length=1, examples=["orange"])
 
 
 @app.get("/")
@@ -56,3 +58,13 @@ def get_embedding(request: EmbeddingRequest):
 def get_similarity(request: SimilarityRequest):
     score = embedding_model.similarity(request.word1, request.word2)
     return {"word1": request.word1, "word2": request.word2, "similarity": score}
+
+
+@app.post("/classify")
+async def classify_image(file: UploadFile = File(...)):
+    """Upload an image; returns its predicted CIFAR-10 class."""
+    image_bytes = await file.read()
+    try:
+        return image_classifier.predict(image_bytes)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not read the uploaded file as an image")
