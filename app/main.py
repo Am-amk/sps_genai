@@ -1,9 +1,11 @@
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from app.bigram_model import BigramModel
 from app.embedding_model import EmbeddingModel
 from app.image_classifier import ImageClassifier
+from app.digit_generator import DigitGenerator
 
 app = FastAPI(title="SPS GenAI API")
 
@@ -19,6 +21,7 @@ corpus = [
 bigram_model = BigramModel(corpus)
 embedding_model = EmbeddingModel()
 image_classifier = ImageClassifier()
+digit_generator = DigitGenerator()
 
 
 class TextGenerationRequest(BaseModel):
@@ -68,3 +71,13 @@ async def classify_image(file: UploadFile = File(...)):
         return image_classifier.predict(image_bytes)
     except Exception:
         raise HTTPException(status_code=400, detail="Could not read the uploaded file as an image")
+
+
+@app.get("/generate_digits", responses={200: {"content": {"image/png": {}}}})
+def generate_digits(
+    num_images: int = Query(16, ge=1, le=64, description="Number of digits to generate"),
+    seed: int | None = Query(None, description="Optional random seed for reproducible output"),
+):
+    """Generate hand-written digits with the GAN trained on MNIST; returns a PNG grid."""
+    png = digit_generator.generate_png(num_images=num_images, seed=seed)
+    return Response(content=png, media_type="image/png")
